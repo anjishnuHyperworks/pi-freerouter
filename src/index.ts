@@ -332,9 +332,15 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 	let modelFetchPromise: Promise<FreeRouter> | undefined;
 	let maxTokens = DEFAULT_MODEL_MAX_TOKENS;
 
-	function currentApiKey(): string | undefined {
-		const apiKey = process.env.OPENROUTER_API_KEY;
-		return apiKey && apiKey.length > 0 ? apiKey : undefined;
+	// Key saved in pi (auth.json, passed in as options.apiKey) wins, then the env variable.
+	// Remember the last good one so the hourly refresh, which has no options, still works.
+	let lastApiKey: string | undefined;
+	function currentApiKey(passedKey?: string): string | undefined {
+		const fromPi =
+			passedKey && passedKey !== DEFERRED_API_KEY_PLACEHOLDER ? passedKey : undefined;
+		const apiKey = fromPi || process.env.OPENROUTER_API_KEY || lastApiKey;
+		if (apiKey) lastApiKey = apiKey;
+		return apiKey || undefined;
 	}
 
 	async function ensureRouter(apiKey: string): Promise<FreeRouter> {
@@ -419,10 +425,10 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 			let batchCount = 0;
 
 			(async () => {
-				const apiKey = currentApiKey();
+				const apiKey = currentApiKey(options?.apiKey);
 				if (!apiKey) {
 					const errMsg =
-						"OPENROUTER_API_KEY is not set. Set it, then retry your prompt.";
+						"No OpenRouter key found. Save one in pi or set OPENROUTER_API_KEY, then retry.";
 					stream.push({
 						type: "error",
 						reason: "error",

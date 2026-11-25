@@ -116,6 +116,25 @@ describe("freerouter extension startup", () => {
     assert.match(events[0].error.errorMessage, /OPENROUTER_API_KEY/);
   });
 
+  it("uses the key pi passes in when OPENROUTER_API_KEY is missing", async () => {
+    const fakePi = makePi();
+    await freerouterExtension(fakePi.pi);
+    let authHeader: string | undefined;
+    globalThis.fetch = async (_url: any, init?: any) => {
+      authHeader = new Headers(init?.headers).get("authorization") ?? undefined;
+      throw new Error("stop after first call");
+    };
+
+    const stream = fakePi.providerConfig.streamSimple(
+      undefined,
+      { messages: [] },
+      { apiKey: "sk-or-saved-in-pi" },
+    ) as AsyncIterable<any>;
+    await collectEvents(stream);
+
+    assert.equal(authHeader, "Bearer sk-or-saved-in-pi");
+  });
+
   it("registers session_shutdown hook to clear the refresh timer", async () => {
     const fakePi = makePi();
     await freerouterExtension(fakePi.pi);
