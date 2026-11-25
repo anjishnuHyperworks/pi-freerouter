@@ -7,6 +7,7 @@ import type {
 	ProviderConfig,
 	SimpleStreamOptions,
 } from "./types.js";
+import { AuthStorage } from "@earendil-works/pi-coding-agent";
 import { createAssistantMessageEventStream } from "./types.js";
 import { fetchFreeModels } from "./discovery.js";
 import { FreeRouter } from "./router.js";
@@ -332,13 +333,18 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 	let modelFetchPromise: Promise<FreeRouter> | undefined;
 	let maxTokens = DEFAULT_MODEL_MAX_TOKENS;
 
-	// Key saved in pi (auth.json, passed in as options.apiKey) wins, then the env variable.
-	// Remember the last good one so the hourly refresh, which has no options, still works.
+	// Order: key pi passes for "free-router" -> pi's saved "openrouter" key
+	// (auth.json, then OPENROUTER_API_KEY) -> last good key, for the hourly refresh.
 	let lastApiKey: string | undefined;
-	function currentApiKey(passedKey?: string): string | undefined {
+	async function currentApiKey(passedKey?: string): Promise<string | undefined> {
 		const fromPi =
 			passedKey && passedKey !== DEFERRED_API_KEY_PLACEHOLDER ? passedKey : undefined;
-		const apiKey = fromPi || process.env.OPENROUTER_API_KEY || lastApiKey;
+		const saved = fromPi
+			? undefined
+			: await AuthStorage.create()
+					.getApiKey("openrouter")
+					.catch(() => process.env.OPENROUTER_API_KEY);
+		const apiKey = fromPi || saved || lastApiKey;
 		if (apiKey) lastApiKey = apiKey;
 		return apiKey || undefined;
 	}
@@ -366,7 +372,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 
 	// Hourly background refresh — picks up new free models without restarting Pi.
 	async function refreshModels(): Promise<void> {
-		const apiKey = currentApiKey();
+		const apiKey = await currentApiKey();
 		if (!apiKey) return;
 
 		try {
@@ -425,7 +431,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 			let batchCount = 0;
 
 			(async () => {
-				const apiKey = currentApiKey(options?.apiKey);
+				const apiKey = await currentApiKey(options?.apiKey);
 				if (!apiKey) {
 					const errMsg =
 						"No OpenRouter key found. Save one in pi or set OPENROUTER_API_KEY, then retry.";

@@ -1,5 +1,8 @@
 import { strict as assert } from "node:assert";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import freerouterExtension from "./index.js";
@@ -47,15 +50,21 @@ async function collectEvents(stream: AsyncIterable<any>): Promise<any[]> {
 describe("freerouter extension startup", () => {
   let originalFetch: typeof globalThis.fetch;
   let originalApiKey: string | undefined;
+  let originalAgentDir: string | undefined;
 
   beforeEach(() => {
     originalFetch = globalThis.fetch;
     originalApiKey = process.env.OPENROUTER_API_KEY;
     delete process.env.OPENROUTER_API_KEY;
+    // Point pi at an empty folder so tests never read the real saved keys.
+    originalAgentDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = mkdtempSync(join(tmpdir(), "freerouter-test-"));
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    if (originalAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = originalAgentDir;
     if (originalApiKey === undefined) {
       delete process.env.OPENROUTER_API_KEY;
     } else {
@@ -133,6 +142,29 @@ describe("freerouter extension startup", () => {
     await collectEvents(stream);
 
     assert.equal(authHeader, "Bearer sk-or-saved-in-pi");
+  });
+
+  it("falls back to pi's saved openrouter key", async () => {
+    writeFileSync(
+      join(process.env.PI_CODING_AGENT_DIR!, "auth.json"),
+      JSON.stringify({ openrouter: { type: "api_key", key: "sk-or-from-auth-json" } }),
+    );
+    const fakePi = makePi();
+    await freerouterExtension(fakePi.pi);
+    let authHeader: string | undefined;
+    globalThis.fetch = async (_url: any, init?: any) => {
+      authHeader = new Headers(init?.headers).get("authorization") ?? undefined;
+      throw new Error("stop after first call");
+    };
+
+    const stream = fakePi.providerConfig.streamSimple(
+      undefined,
+      { messages: [] },
+      { apiKey: "pi-freerouter-selectable-placeholder" },
+    ) as AsyncIterable<any>;
+    await collectEvents(stream);
+
+    assert.equal(authHeader, "Bearer sk-or-from-auth-json");
   });
 
   it("registers session_shutdown hook to clear the refresh timer", async () => {
