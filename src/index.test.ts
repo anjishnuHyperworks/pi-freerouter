@@ -167,6 +167,49 @@ describe("freerouter extension startup", () => {
     assert.equal(authHeader, "Bearer sk-or-from-auth-json");
   });
 
+  it("does not mark progress partials as errors before a successful response", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    globalThis.fetch = async (url) => {
+      const href = String(url);
+      if (href.endsWith("/models")) {
+        return new Response(JSON.stringify({
+          data: [
+            { id: "openai/gpt-oss-20b:free", name: "GPT OSS", context_length: 128000 },
+          ],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+
+      const encoder = new TextEncoder();
+      const body = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(
+            [
+              `data: ${JSON.stringify({ choices: [{ delta: { content: "Hello" }, finish_reason: null }] })}\n\n`,
+              `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "stop" }] })}\n\n`,
+              "data: [DONE]\n\n",
+            ].join(""),
+          ));
+          controller.close();
+        },
+      });
+      return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+    };
+
+    const fakePi = makePi();
+    await freerouterExtension(fakePi.pi);
+    const events = await collectEvents(fakePi.providerConfig.streamSimple(
+      undefined,
+      { messages: [{ role: "user", content: "hello", timestamp: Date.now() }] },
+    ));
+
+    const progressPartials = events
+      .filter((event) => event.type !== "error")
+      .map((event) => event.partial)
+      .filter(Boolean);
+    assert.ok(progressPartials.length > 0);
+    assert.equal(progressPartials.some((partial) => partial.stopReason === "error"), false);
+  });
+
   it("registers session_shutdown hook to clear the refresh timer", async () => {
     const fakePi = makePi();
     await freerouterExtension(fakePi.pi);

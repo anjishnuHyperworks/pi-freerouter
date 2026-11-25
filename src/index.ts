@@ -210,7 +210,7 @@ async function raceModels(
 					contentIndex: 0,
 					content: `Using ${candidateIds[idx]}`,
 					partial: {
-						...BASE_ERROR_OUTPUT,
+						...BASE_PROGRESS_OUTPUT,
 						content: [],
 						timestamp: Date.now(),
 					} as AssistantMessage,
@@ -324,6 +324,11 @@ const BASE_ERROR_OUTPUT = {
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 	},
 	stopReason: "error" as const,
+};
+
+const BASE_PROGRESS_OUTPUT = {
+	...BASE_ERROR_OUTPUT,
+	stopReason: "stop" as const,
 };
 
 export default async function (pi: ExtensionAPI): Promise<void> {
@@ -456,14 +461,14 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 				// Push initial start + progress feedback before any racing.
 				// The real content arrives via raceModels (which skips its own start).
 				const progressBase = {
-					...BASE_ERROR_OUTPUT,
+					...BASE_PROGRESS_OUTPUT,
 					content: [{ type: "text", text: "" }],
 					timestamp: Date.now(),
 				} as AssistantMessage;
 				stream.push({ type: "start", partial: progressBase });
 				{
 					const tp = {
-						...BASE_ERROR_OUTPUT,
+						...BASE_PROGRESS_OUTPUT,
 						content: [],
 						timestamp: Date.now(),
 					} as AssistantMessage;
@@ -527,7 +532,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 					// Show which models are being tried in the thinking area.
 					{
 						const tp = {
-							...BASE_ERROR_OUTPUT,
+							...BASE_PROGRESS_OUTPUT,
 							content: [],
 							timestamp: Date.now(),
 						} as AssistantMessage;
