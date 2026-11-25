@@ -1,6 +1,6 @@
 {
   "name": "@anjishnu-hyperworks/pi-freerouter",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "description": "Pi coding agent extension — auto-routes to free OpenRouter models (fork that also reads the key saved in pi)",
   "type": "module",
   "main": "dist/index.js",

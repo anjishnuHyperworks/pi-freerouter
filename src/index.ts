@@ -7,7 +7,9 @@ import type {
 	ProviderConfig,
 	SimpleStreamOptions,
 } from "./types.js";
-import { AuthStorage } from "@earendil-works/pi-coding-agent";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { createAssistantMessageEventStream } from "./types.js";
 import { fetchFreeModels } from "./discovery.js";
 import { FreeRouter } from "./router.js";
@@ -331,6 +333,18 @@ const BASE_PROGRESS_OUTPUT = {
 	stopReason: "stop" as const,
 };
 
+// The "openrouter" API key saved in pi's auth.json, if any. Never throws.
+function savedOpenRouterKey(): string | undefined {
+	try {
+		const dir = process.env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent");
+		const auth = JSON.parse(readFileSync(join(dir, "auth.json"), "utf8"));
+		const key = auth?.openrouter?.type === "api_key" ? auth.openrouter.key : undefined;
+		return typeof key === "string" && key.length > 0 ? key : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export default async function (pi: ExtensionAPI): Promise<void> {
 	// `let` so the background refresh can replace it; each streamSimple call
 	// captures its own snapshot via `const localRouter = router`.
@@ -338,18 +352,15 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 	let modelFetchPromise: Promise<FreeRouter> | undefined;
 	let maxTokens = DEFAULT_MODEL_MAX_TOKENS;
 
-	// Order: key pi passes for "free-router" -> pi's saved "openrouter" key
-	// (auth.json, then OPENROUTER_API_KEY) -> last good key, for the hourly refresh.
+	// Order: key pi passes for "free-router" -> "openrouter" key saved in pi's
+	// auth.json -> OPENROUTER_API_KEY -> last good key, for the hourly refresh.
+	// auth.json is read directly: pi's own AuthStorage is not given to add-ons at runtime.
 	let lastApiKey: string | undefined;
 	async function currentApiKey(passedKey?: string): Promise<string | undefined> {
 		const fromPi =
 			passedKey && passedKey !== DEFERRED_API_KEY_PLACEHOLDER ? passedKey : undefined;
-		const saved = fromPi
-			? undefined
-			: await AuthStorage.create()
-					.getApiKey("openrouter")
-					.catch(() => process.env.OPENROUTER_API_KEY);
-		const apiKey = fromPi || saved || lastApiKey;
+		const apiKey =
+			fromPi || savedOpenRouterKey() || process.env.OPENROUTER_API_KEY || lastApiKey;
 		if (apiKey) lastApiKey = apiKey;
 		return apiKey || undefined;
 	}
@@ -377,10 +388,10 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 
 	// Hourly background refresh — picks up new free models without restarting Pi.
 	async function refreshModels(): Promise<void> {
-		const apiKey = await currentApiKey();
-		if (!apiKey) return;
-
 		try {
+			const apiKey = await currentApiKey();
+			if (!apiKey) return;
+
 			const fresh = await fetchFreeModels(apiKey);
 			if (fresh.length > 0) {
 				router = new FreeRouter(fresh.map((m) => m.id));
