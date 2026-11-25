@@ -1,7 +1,7 @@
 {
-  "name": "pi-freerouter",
-  "version": "0.1.16",
-  "description": "Pi coding agent extension — auto-routes to free OpenRouter models",
+  "name": "@anjishnu-hyperworks/pi-freerouter",
+  "version": "0.1.18",
+  "description": "Pi coding agent extension — auto-routes to free OpenRouter models (fork that also reads the key saved in pi)",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -35,5 +35,12 @@
     "pi-package",
     "openrouter"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anjishnuHyperworks/pi-freerouter.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

@@ -2,28 +2,31 @@
 
 Pi coding agent extension that routes every request through OpenRouter's free model tier — no paid API key needed beyond your OpenRouter account.
 
+> Fork of [parkjangwon/pi-freerouter](https://github.com/parkjangwon/pi-freerouter).
+> Only change: it also uses the OpenRouter key you saved in pi, so the
+> `OPENROUTER_API_KEY` env variable is no longer required.
+
 ## Quick start
 
 **1. Install**
 
 ```bash
-pi install npm:pi-freerouter
+pi install npm:@anjishnu-hyperworks/pi-freerouter
 ```
 
-**2. Set your OpenRouter API key**
+**2. Give it your OpenRouter API key** (any one of these)
 
-```bash
-export OPENROUTER_API_KEY=sk-or-...
-```
+- Save it in pi under the `openrouter` provider (it lands in `~/.pi/agent/auth.json`), or
+- Set the env variable: `export OPENROUTER_API_KEY=sk-or-...`
 
 Free key at [openrouter.ai/keys](https://openrouter.ai/keys).
 
 **3. Start Pi and select FreeRouter**
 
 FreeRouter appears in the model picker as `auto [free-router]`. Select it when
-you want requests routed through OpenRouter's free model tier. If
-`OPENROUTER_API_KEY` is not set, Pi still starts normally; pi-freerouter shows
-the key error only after you send a prompt with `auto [free-router]` selected.
+you want requests routed through OpenRouter's free model tier. If no key is
+found, Pi still starts normally; pi-freerouter shows the key error only after
+you send a prompt with `auto [free-router]` selected.
 
 ---
 
